@@ -1,0 +1,10 @@
+
+{
+  "name": "com.mrl.chrome.chalktalk.messaging",
+  "description": "Chrome Native Messaging API Chalktalk Host",
+  "path": "chalktalk-messaging-native-host.bat",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://okigkihhdjokmonackalodhjchiphbgk/"
+  ]
+}

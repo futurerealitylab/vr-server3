@@ -1,0 +1,32 @@
+#!/usr/local/bin/node
+
+var fs = require('fs');
+var nativeMessage = require('chrome-native-messaging');
+var dgram = require('dgram');
+
+var output = new nativeMessage.Output();
+output.pipe(process.stdout);
+
+var CLIENT_PORT = 1611;
+var CLIENT_HOST = '127.0.0.1';
+var pullSocket = dgram.createSocket({type: 'udp4', 'reuseAddr': true}, function() {});
+pullSocket.on('message', function (message, remote) {
+    output.write(message.toString('utf8'));
+});
+pullSocket.bind(CLIENT_PORT, CLIENT_HOST);
+
+var SERVER_PORT = 1610;
+var SERVER_HOST = '127.0.0.1';
+var pushSocket = dgram.createSocket('udp4');
+process.stdin
+    .pipe(new nativeMessage.Input())
+    .pipe(new nativeMessage.Transform(function(msg, push, done) {
+        var data = new Buffer(msg);
+        pushSocket.send(data, 0, data.length, SERVER_PORT, SERVER_HOST, function(err, bytes) {
+            if (err) throw err;
+        });
+        // Use push(<string>) to send a message to Chrome/Chalktalk.
+        // This must be done prior to invoking done.
+        done();
+    }))
+    .pipe(output);

@@ -1,0 +1,18 @@
+﻿Build started 3/16/2015 1:22:43 PM.
+     1>Project "C:\Users\MoCap Terminal User\Desktop\MRL\Black Box\Black Box\BlackBoxServer\BlackBoxServer\BlackBoxServer.vcxproj" on node 2 (Build target(s)).
+     1>Link:
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\MoCap Terminal User\Desktop\MRL\Black Box\Black Box\BlackBoxServer\Debug\BlackBoxServer.exe" /INCREMENTAL /NOLOGO /LIBPATH:"C:\Users\MoCap Terminal User\Desktop\MRL\Black Box\Black Box\BlackBoxServer\Libraries\\" ws2_32.lib NatNetLibStatic32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"C:\Users\MoCap Terminal User\Desktop\MRL\Black Box\Black Box\BlackBoxServer\Debug\BlackBoxServer.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Users\MoCap Terminal User\Desktop\MRL\Black Box\Black Box\BlackBoxServer\Debug\BlackBoxServer.lib" /MACHINE:X86 Debug\BlackBoxServer.obj
+         Debug\stdafx.obj
+         Debug\tinyxml2.obj
+     1>LINK : warning LNK4098: defaultlib 'MSVCRT' conflicts with use of other libs; use /NODEFAULTLIB:library
+     1>NatNetLibStatic32.lib(ClientCore.obj) : warning LNK4099: PDB 'vc100.pdb' was not found with 'NatNetLibStatic32.lib(ClientCore.obj)' or at 'C:\Users\MoCap Terminal User\Desktop\MRL\Black Box\Black Box\BlackBoxServer\Debug\vc100.pdb'; linking object as if no debug info
+     1>NatNetLibStatic32.lib(NatNetClient.obj) : warning LNK4099: PDB 'vc100.pdb' was not found with 'NatNetLibStatic32.lib(NatNetClient.obj)' or at 'C:\Users\MoCap Terminal User\Desktop\MRL\Black Box\Black Box\BlackBoxServer\Debug\vc100.pdb'; linking object as if no debug info
+     1>NatNetLibStatic32.lib(NatNetHelper.obj) : warning LNK4099: PDB 'vc100.pdb' was not found with 'NatNetLibStatic32.lib(NatNetHelper.obj)' or at 'C:\Users\MoCap Terminal User\Desktop\MRL\Black Box\Black Box\BlackBoxServer\Debug\vc100.pdb'; linking object as if no debug info
+     1>NatNetLibStatic32.lib(quattoeuler.obj) : warning LNK4099: PDB 'vc100.pdb' was not found with 'NatNetLibStatic32.lib(quattoeuler.obj)' or at 'C:\Users\MoCap Terminal User\Desktop\MRL\Black Box\Black Box\BlackBoxServer\Debug\vc100.pdb'; linking object as if no debug info
+     1>NatNetLibStatic32.lib(UnicastClientCore.obj) : warning LNK4099: PDB 'vc100.pdb' was not found with 'NatNetLibStatic32.lib(UnicastClientCore.obj)' or at 'C:\Users\MoCap Terminal User\Desktop\MRL\Black Box\Black Box\BlackBoxServer\Debug\vc100.pdb'; linking object as if no debug info
+         BlackBoxServer.vcxproj -> C:\Users\MoCap Terminal User\Desktop\MRL\Black Box\Black Box\BlackBoxServer\Debug\BlackBoxServer.exe
+     1>Done Building Project "C:\Users\MoCap Terminal User\Desktop\MRL\Black Box\Black Box\BlackBoxServer\BlackBoxServer\BlackBoxServer.vcxproj" (Build target(s)).
+
+Build succeeded.
+
+Time Elapsed 00:00:00.37
