@@ -39,9 +39,6 @@
     <ClInclude Include="update_protocol.pb.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="manymouse.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="wiimote.h">
       <Filter>Source Files</Filter>
     </ClInclude>
@@ -60,9 +57,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="update_protocol.pb.cc">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="manymouse.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\..\pymanymouse-master\macosx_hidutilities.c">
