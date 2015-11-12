@@ -56,7 +56,8 @@ class Stream {
 		// Bind to correct NIC
 		bind_addr.sin_family = AF_INET;
 		// bind_addr.sin_addr.s_addr = inet_addr(INADDR_ANY);
-		err = inet_pton(AF_INET, "128.122.47.25", &bind_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
+		err = inet_pton(AF_INET, "192.168.1.44", &bind_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
+		//err = inet_pton(AF_INET, "128.122.47.25", &bind_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
 		if (err == SOCKET_ERROR) {
 			exit(0);
 		}
@@ -155,9 +156,10 @@ private:
 	bool models_changed;
 	/* private instance methods */
 	update_protocol_v3::Update *newPacket() {
-		update_protocol_v3::Update *packet = new update_protocol_v3::Update();//   google::protobuf::Arena::CreateMessage<update_protocol_v3::Update>(&arena);
+		update_protocol_v3::Update *packet = new update_protocol_v3::Update();//
 		packet->set_mod_version(mod_version++);
-		packet->set_lhs_frame(true);	//TODO
+		//TODO
+		//packet->set_lhs_frame(true);	
 		packet->set_time(timestamp);
 		packets.push_back(packet);
 		next_packet = packets.begin();
@@ -186,62 +188,12 @@ public:
 		next_packet = packets.begin();
 	}
 
-	// Add a wiimote
-	// Later on, when a packet should be sent, if it contains a wiimote then the button bits of that 
-	// wiimote will be updated before the packet is sent.
-	// TODO
-	/*void addWiimote(wiimote *remote) {
-		Mote *m = google::protobuf::Arena::CreateMessage<Mote>(&arena);
-		wiimotes[mote_id_to_label(remote->UniqueID)] = remote;
-		m->set_label(mote_id_to_label(remote->UniqueID));
-		m->set_button_bits(remote->Button.Bits);
-		update_protocol_v3::Update *current_packet = packets.back();
-		if (!(current_packet->ByteSize() + m->ByteSize() < max_packet_bytes)) {
-			current_packet = newPacket();
-		}
-		assert(current_packet->ByteSize() + m->ByteSize() < max_packet_bytes);
-		current_packet->mutable_motes()->AddAllocated(m);
-	}*/
-
-	//// Add a tracked body to the packet group
-	//// Todo remove useless fields from the protobuf and update this
-	//void addTrackedBody(int id, string label, bool tracking_valid, float x, float y, float z, float qx, float qy, float qz, float qw) {
-	//	TrackedBody *b = google::protobuf::Arena::CreateMessage<TrackedBody>(&arena);
-	//	b->set_id(id);
-	//	// Set the label to a copy of label
-	//	b->set_label(label);
-	//	b->set_trackingvalid(tracking_valid);
-	//	b->set_meanerror(0);
-	//	Position *pos = google::protobuf::Arena::CreateMessage<Position>(&arena);
-	//	pos->set_x(x);
-	//	pos->set_y(y);
-	//	pos->set_z(z);
-	//	Rotation *rot = google::protobuf::Arena::CreateMessage<Rotation>(&arena);
-	//	rot->set_x(qx);
-	//	rot->set_y(qy);
-	//	rot->set_z(qz);
-	//	rot->set_w(qw);
-	//	b->set_allocated_position(pos);
-	//	b->set_allocated_rotation(rot);
-	//	Update *current_packet = packets.back();
-	//	if (!(current_packet->ByteSize() + b->ByteSize() < max_packet_bytes)) {
-	//		// Create a new packet to hold the rigid body
-	//		current_packet = newPacket();
-	//	}
-	//	assert(current_packet->ByteSize() + b->ByteSize() < max_packet_bytes);
-	//	current_packet->mutable_mocap()->mutable_tracked_bodies()->AddAllocated(b);
-	//	assert(current_packet->ByteSize() < max_packet_bytes);
-	//}
-
 	// Add a live object to the packet group
 	// By Zhenyi
 	void addLiveBody(int id, string label, bool tracking_valid, float x, float y, float z, float qx, float qy, float qz, float qw) {
-		update_protocol_v3::LiveObject *liveObj = new update_protocol_v3::LiveObject();  //google::protobuf::Arena::CreateMessage<update_protocol_v3::LiveObject>(&arena);
-		//liveObj->set_id(id);								// not sure if it is required
-
+		update_protocol_v3::LiveObject *liveObj = new update_protocol_v3::LiveObject();
+		
 		liveObj->set_label(label);						//optional string label = 1;
-		//liveObj->set_trackingvalid(tracking_valid);		// not sure if it is required
-		//liveObj->set_meanerror(0);						// not sure if it is required
 		
 		liveObj->set_x(x);
 		liveObj->set_y(y);
@@ -252,19 +204,21 @@ public:
 		liveObj->set_qz(qz);
 		liveObj->set_qw(qw);
 
+		std::cout << "check qx: " << qx << "\tqy:" << qy << "\tqz:" << qz << "\tqw:" << qw << "\n";
+
 		//liveObj->set_button_bits();
 
 		// not sure about the repeated axisbutton
-		int axis_buttons_size = liveObj->axis_buttons_size();
-		for (int i = 0; i < axis_buttons_size; i++) {
-			update_protocol_v3::AxisButton * axisBtn = liveObj->add_axis_buttons();
-		}
+		//int axis_buttons_size = liveObj->axis_buttons_size();
+		//for (int i = 0; i < axis_buttons_size; i++) {
+		//	update_protocol_v3::AxisButton * axisBtn = liveObj->add_axis_buttons();
+		//}
 			
 		// not sure about the repeated extradata
-		int extra_data_size = liveObj->extra_data_size();
-		for (int i = 0; i < extra_data_size; i++) {
-			update_protocol_v3::ExtraData * extraDt = liveObj->add_extra_data();
-		}
+		//int extra_data_size = liveObj->extra_data_size();
+		//for (int i = 0; i < extra_data_size; i++) {
+		//	update_protocol_v3::ExtraData * extraDt = liveObj->add_extra_data();
+		//}
 
 		update_protocol_v3::Update *current_packet = packets.back();
 		if (!(current_packet->ByteSize() + liveObj->ByteSize() < max_packet_bytes)) {
@@ -302,23 +256,7 @@ public:
 		if (packet->label() == "") {
 			packet->set_label("motive");
 		}
-		// Check for wiimotes in this packet and update them
-		// By Zhenyi
-		/*google::protobuf::RepeatedPtrField<Mote>::iterator motes_iterator = packet->mutable_motes()->begin();
-		while (motes_iterator != packet->mutable_motes()->end()) {
-			Mote mote = *motes_iterator;
-			//printf("button bits: %d\n", mote.button_bits());
-			wiimote *wm = wiimotes[mote.label()];
-			if (!wm) {
-				motes_iterator++;
-				continue;
-			}
-			// TODO: Invoke refreshstate for all motes on a thread
-			wm->RefreshState();
-			mote.set_button_bits(wm->Button.Bits);
-			motes_iterator++;
-		}
-		*/
+		// Check for wiimotes in this packet and update them BUT COMMENT By Zhenyi
 		// Fill the buffer
 		assert(packet->ByteSize() < max_packet_bytes);
 		packet->SerializePartialToArray(buffer, max_packet_bytes);
@@ -363,7 +301,9 @@ PacketGroup * PacketGroup::head = NULL;
 std::mutex PacketGroup::packet_groups_lock;
 char PacketGroup::buffer[PacketGroup::max_packet_bytes];
 Stream PacketGroup::multicast_stream = Stream("224.1.1.1", 1611, true);
+//Stream PacketGroup::multicast_stream = Stream("239.255.42.99", 1511, true);
 Stream PacketGroup::unicast_stream = Stream("192.168.1.11", 1612, false);
+//Stream PacketGroup::unicast_stream = Stream("128.122.47.25", 1510, false);
 
 int PacketGroup::mod_version = 0;
 
@@ -401,6 +341,7 @@ int PacketReceivingThread() {
 	//addr.sin_addr.s_addr = inet_addr("192.168.1.44");
 	addr.sin_port = htons(1615);
 	int err = inet_pton(AF_INET, "192.168.1.44", &addr.sin_addr); // S_ADDR of our IP for the WiFi interface
+	//int err = inet_pton(AF_INET, "128.122.47.25", &addr.sin_addr); // S_ADDR of our IP for the WiFi interface
 	if (err == SOCKET_ERROR) {
 		printf("error assigning address\n");
 	}
@@ -420,6 +361,7 @@ int PacketReceivingThread() {
 	from_addr.sin_family = AF_INET;
 	from_addr.sin_port = htons(1615);
 	err = inet_pton(AF_INET, "192.168.1.44", &from_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
+	//err = inet_pton(AF_INET, "128.122.47.25", &from_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
 	if (err == SOCKET_ERROR) {
 		printf("error assigning address\n");
 	}
@@ -461,13 +403,8 @@ void HandleNatNetPacket(sFrameOfMocapData *data, void *pUserData)
 		pg->addPacket(viveUpdate);
 	}
 	viveUpdateLock.unlock();
-	// Wiimotes
-	//for (int i = 0; i < detected; i++) {
-	//	pg->addWiimote(motes[i]);
-	//}
 	// Rigid Bodies
-	// By Zhenyi
-	for (int i = 0; i < data->nLiveObjects; i++)
+	for (int i = 0; i < data->nRigidBodies; i++)
 	{
 		pg->addLiveBody(data->RigidBodies[i].ID,
 			idToLabel[data->RigidBodies[i].ID],
@@ -632,6 +569,7 @@ int CreateClient(int iConnectionType)
 	// Init Client and connect to NatNet server
 	// to use NatNet default port assigments
 	int retCode = theClient->Initialize("127.0.0.1", "127.0.0.1");
+//	int retCode = theClient->Initialize("128.122.47.25", "128.122.47.25");
 	// to use a different port for commands and/or data:
 	//int retCode = theClient->Initialize(szMyIPAddress, szServerIPAddress, MyServersCommandPort, MyServersDataPort);
 	if (retCode != ErrorCode_OK)
@@ -651,8 +589,10 @@ int CreateClient(int iConnectionType)
 			ServerDescription.HostAppVersion[1], ServerDescription.HostAppVersion[2], ServerDescription.HostAppVersion[3]);
 		printf("NatNet Version: %d.%d.%d.%d\n", ServerDescription.NatNetVersion[0], ServerDescription.NatNetVersion[1],
 			ServerDescription.NatNetVersion[2], ServerDescription.NatNetVersion[3]);
-		printf("Client IP:%s\n", "127.0.0.1");
-		printf("Server IP:%s\n", "127.0.0.1");
+		//printf("Client IP:%s\n", "128.122.47.25");
+		//printf("Server IP:%s\n", "128.122.47.25");
+		printf("Client IP:%s\n", "192.168.0.1");
+		printf("Server IP:%s\n", "192.168.0.1");
 		printf("Server Name:%s\n\n", ServerDescription.szHostComputerName);
 	}
 
@@ -678,6 +618,7 @@ void resetClient()
 	if (iSuccess != 0) {
 		printf("error un-initting Client\n");
 	}
+	//iSuccess = theClient->Initialize("128.122.47.25", "128.122.47.25");
 	iSuccess = theClient->Initialize("127.0.0.1", "127.0.0.1");
 	if (iSuccess != 0) {
 		printf("error re-initting Client\n");

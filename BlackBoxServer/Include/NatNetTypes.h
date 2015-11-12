@@ -236,8 +236,8 @@ typedef struct
     int nOtherMarkers;                          // # of undefined markers
     MarkerData* OtherMarkers;                   // undefined marker data
 	// By Zhenyi
-    //int nRigidBodies;                           // # of rigid bodies
-	int nLiveObjects;                           // # of live objects
+    int nRigidBodies;                           // # of rigid bodies
+	//int nLiveObjects;                           // # of live objects
     sRigidBodyData RigidBodies[MAX_RIGIDBODIES];// Rigid body data
     int nSkeletons;                             // # of Skeletons
     sSkeletonData Skeletons[MAX_SKELETONS];     // Skeleton data
