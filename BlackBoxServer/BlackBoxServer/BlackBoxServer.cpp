@@ -56,7 +56,7 @@ class Stream {
 		// Bind to correct NIC
 		bind_addr.sin_family = AF_INET;
 		// bind_addr.sin_addr.s_addr = inet_addr(INADDR_ANY);
-		err = inet_pton(AF_INET, "192.168.1.44", &bind_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
+		err = inet_pton(AF_INET, "128.122.47.25", &bind_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
 		if (err == SOCKET_ERROR) {
 			exit(0);
 		}
@@ -94,7 +94,7 @@ int CreateClient(int iConnectionType);
 int PacketServingThread();
 int PacketReceivingThread();
 
-Update *viveUpdate;
+update_protocol_v3::Update *viveUpdate;
 std::mutex viveUpdateLock;
 
 unsigned int MyServersDataPort = 1511;
@@ -148,21 +148,17 @@ private:
 	static int mod_version;
 	/* instance fields */
 	google::protobuf::Arena arena;
-	vector<Update * > packets;
-	vector<Update * > ::iterator next_packet;
+	vector<update_protocol_v3::Update * > packets;
+	vector<update_protocol_v3::Update * > ::iterator next_packet;
 	int timestamp;
 	bool recording;
 	bool models_changed;
 	/* private instance methods */
-	Update *newPacket() {
-		Update *packet = google::protobuf::Arena::CreateMessage<Update>(&arena);
+	update_protocol_v3::Update *newPacket() {
+		update_protocol_v3::Update *packet = new update_protocol_v3::Update();//   google::protobuf::Arena::CreateMessage<update_protocol_v3::Update>(&arena);
 		packet->set_mod_version(mod_version++);
+		packet->set_lhs_frame(true);	//TODO
 		packet->set_time(timestamp);
-		// Set the mocap values
-		packet->mutable_mocap()->set_duringrecording(recording);
-		packet->mutable_mocap()->set_trackedmodelschanged(models_changed);
-		// TODO: delete this timecode field
-		packet->mutable_mocap()->set_timecode("empty");
 		packets.push_back(packet);
 		next_packet = packets.begin();
 		return packet;
@@ -177,14 +173,14 @@ public:
 		timestamp = _timestamp;
 		recording = _recording;
 		models_changed = _models_changed;
-		packets = vector<Update * > ();
+		packets = vector<update_protocol_v3::Update * > ();
 		// Add the first packet
-		Update *motes_packet = newPacket();
+		update_protocol_v3::Update *motes_packet = newPacket();
 		assert(motes_packet->ByteSize() < max_packet_bytes);
 		// Start the iterator
 		next_packet = packets.begin();
 	}
-	void addPacket(Update *packet) {
+	void addPacket(update_protocol_v3::Update *packet) {
 		packet->set_mod_version(mod_version++);
 		packets.push_back(packet);
 		next_packet = packets.begin();
@@ -193,52 +189,96 @@ public:
 	// Add a wiimote
 	// Later on, when a packet should be sent, if it contains a wiimote then the button bits of that 
 	// wiimote will be updated before the packet is sent.
-	void addWiimote(wiimote *remote) {
+	// TODO
+	/*void addWiimote(wiimote *remote) {
 		Mote *m = google::protobuf::Arena::CreateMessage<Mote>(&arena);
 		wiimotes[mote_id_to_label(remote->UniqueID)] = remote;
 		m->set_label(mote_id_to_label(remote->UniqueID));
 		m->set_button_bits(remote->Button.Bits);
-		Update *current_packet = packets.back();
+		update_protocol_v3::Update *current_packet = packets.back();
 		if (!(current_packet->ByteSize() + m->ByteSize() < max_packet_bytes)) {
 			current_packet = newPacket();
 		}
 		assert(current_packet->ByteSize() + m->ByteSize() < max_packet_bytes);
 		current_packet->mutable_motes()->AddAllocated(m);
-	}
+	}*/
 
-	// Add a tracked body to the packet group
-	// Todo remove useless fields from the protobuf and update this
-	void addTrackedBody(int id, string label, bool tracking_valid, float x, float y, float z, float qx, float qy, float qz, float qw) {
-		TrackedBody *b = google::protobuf::Arena::CreateMessage<TrackedBody>(&arena);
-		b->set_id(id);
-		// Set the label to a copy of label
-		b->set_label(label);
-		b->set_trackingvalid(tracking_valid);
-		b->set_meanerror(0);
-		Position *pos = google::protobuf::Arena::CreateMessage<Position>(&arena);
-		pos->set_x(x);
-		pos->set_y(y);
-		pos->set_z(z);
-		Rotation *rot = google::protobuf::Arena::CreateMessage<Rotation>(&arena);
-		rot->set_x(qx);
-		rot->set_y(qy);
-		rot->set_z(qz);
-		rot->set_w(qw);
-		b->set_allocated_position(pos);
-		b->set_allocated_rotation(rot);
-		Update *current_packet = packets.back();
-		if (!(current_packet->ByteSize() + b->ByteSize() < max_packet_bytes)) {
+	//// Add a tracked body to the packet group
+	//// Todo remove useless fields from the protobuf and update this
+	//void addTrackedBody(int id, string label, bool tracking_valid, float x, float y, float z, float qx, float qy, float qz, float qw) {
+	//	TrackedBody *b = google::protobuf::Arena::CreateMessage<TrackedBody>(&arena);
+	//	b->set_id(id);
+	//	// Set the label to a copy of label
+	//	b->set_label(label);
+	//	b->set_trackingvalid(tracking_valid);
+	//	b->set_meanerror(0);
+	//	Position *pos = google::protobuf::Arena::CreateMessage<Position>(&arena);
+	//	pos->set_x(x);
+	//	pos->set_y(y);
+	//	pos->set_z(z);
+	//	Rotation *rot = google::protobuf::Arena::CreateMessage<Rotation>(&arena);
+	//	rot->set_x(qx);
+	//	rot->set_y(qy);
+	//	rot->set_z(qz);
+	//	rot->set_w(qw);
+	//	b->set_allocated_position(pos);
+	//	b->set_allocated_rotation(rot);
+	//	Update *current_packet = packets.back();
+	//	if (!(current_packet->ByteSize() + b->ByteSize() < max_packet_bytes)) {
+	//		// Create a new packet to hold the rigid body
+	//		current_packet = newPacket();
+	//	}
+	//	assert(current_packet->ByteSize() + b->ByteSize() < max_packet_bytes);
+	//	current_packet->mutable_mocap()->mutable_tracked_bodies()->AddAllocated(b);
+	//	assert(current_packet->ByteSize() < max_packet_bytes);
+	//}
+
+	// Add a live object to the packet group
+	// By Zhenyi
+	void addLiveBody(int id, string label, bool tracking_valid, float x, float y, float z, float qx, float qy, float qz, float qw) {
+		update_protocol_v3::LiveObject *liveObj = new update_protocol_v3::LiveObject();  //google::protobuf::Arena::CreateMessage<update_protocol_v3::LiveObject>(&arena);
+		//liveObj->set_id(id);								// not sure if it is required
+
+		liveObj->set_label(label);						//optional string label = 1;
+		//liveObj->set_trackingvalid(tracking_valid);		// not sure if it is required
+		//liveObj->set_meanerror(0);						// not sure if it is required
+		
+		liveObj->set_x(x);
+		liveObj->set_y(y);
+		liveObj->set_z(z);
+
+		liveObj->set_qx(qx);
+		liveObj->set_qy(qy);
+		liveObj->set_qz(qz);
+		liveObj->set_qw(qw);
+
+		//liveObj->set_button_bits();
+
+		// not sure about the repeated axisbutton
+		int axis_buttons_size = liveObj->axis_buttons_size();
+		for (int i = 0; i < axis_buttons_size; i++) {
+			update_protocol_v3::AxisButton * axisBtn = liveObj->add_axis_buttons();
+		}
+			
+		// not sure about the repeated extradata
+		int extra_data_size = liveObj->extra_data_size();
+		for (int i = 0; i < extra_data_size; i++) {
+			update_protocol_v3::ExtraData * extraDt = liveObj->add_extra_data();
+		}
+
+		update_protocol_v3::Update *current_packet = packets.back();
+		if (!(current_packet->ByteSize() + liveObj->ByteSize() < max_packet_bytes)) {
 			// Create a new packet to hold the rigid body
 			current_packet = newPacket();
 		}
-		assert(current_packet->ByteSize() + b->ByteSize() < max_packet_bytes);
-		current_packet->mutable_mocap()->mutable_tracked_bodies()->AddAllocated(b);
+		assert(current_packet->ByteSize() + liveObj->ByteSize() < max_packet_bytes);
+		current_packet->mutable_live_objects()->AddAllocated(liveObj);
 		assert(current_packet->ByteSize() < max_packet_bytes);
 	}
 
-	Update *getNextPacketToSend() {
+	update_protocol_v3::Update *getNextPacketToSend() {
 		assert(packets.size() > 0);
-		Update *packet = *next_packet;
+		update_protocol_v3::Update *packet = *next_packet;
 		// Step forward and reset to the beginning if we are at the end
 		next_packet++;
 		if (next_packet == packets.end()) {
@@ -257,12 +297,14 @@ public:
 		// Ensure our packet group is not free'd while we send one of its packets
 		packet_groups_lock.lock();
 		// Get the current packet of the packet group
-		Update *packet = head->getNextPacketToSend();
-		if (packet->id() == "") {
-			packet->set_id("motive");
+		update_protocol_v3::Update *packet = head->getNextPacketToSend();
+		// By Zhenyi
+		if (packet->label() == "") {
+			packet->set_label("motive");
 		}
 		// Check for wiimotes in this packet and update them
-		google::protobuf::RepeatedPtrField<Mote>::iterator motes_iterator = packet->mutable_motes()->begin();
+		// By Zhenyi
+		/*google::protobuf::RepeatedPtrField<Mote>::iterator motes_iterator = packet->mutable_motes()->begin();
 		while (motes_iterator != packet->mutable_motes()->end()) {
 			Mote mote = *motes_iterator;
 			//printf("button bits: %d\n", mote.button_bits());
@@ -276,6 +318,7 @@ public:
 			mote.set_button_bits(wm->Button.Bits);
 			motes_iterator++;
 		}
+		*/
 		// Fill the buffer
 		assert(packet->ByteSize() < max_packet_bytes);
 		packet->SerializePartialToArray(buffer, max_packet_bytes);
@@ -392,7 +435,7 @@ int PacketReceivingThread() {
 		
 		//printf("%d bytes received\n", recv_status);
 		
-		Update *update = new Update();
+		update_protocol_v3::Update *update = new update_protocol_v3::Update();
 		viveUpdateLock.lock();
 		update->ParseFromArray(buf, recv_status);
 		// std::cout << "update id: " << update->id() << std::endl;
@@ -419,13 +462,14 @@ void HandleNatNetPacket(sFrameOfMocapData *data, void *pUserData)
 	}
 	viveUpdateLock.unlock();
 	// Wiimotes
-	for (int i = 0; i < detected; i++) {
-		pg->addWiimote(motes[i]);
-	}
+	//for (int i = 0; i < detected; i++) {
+	//	pg->addWiimote(motes[i]);
+	//}
 	// Rigid Bodies
-	for (int i = 0; i < data->nRigidBodies; i++)
+	// By Zhenyi
+	for (int i = 0; i < data->nLiveObjects; i++)
 	{
-		pg->addTrackedBody(data->RigidBodies[i].ID,
+		pg->addLiveBody(data->RigidBodies[i].ID,
 			idToLabel[data->RigidBodies[i].ID],
 			data->RigidBodies[i].params & 0x01, // tracking valid param
 			data->RigidBodies[i].x,

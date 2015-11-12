@@ -25,7 +25,8 @@
 #include <mutex>
 
 #define INTERNAL_SUPPRESS_PROTOBUF_FIELD_DEPRECATION
-#include "update_protocol.pb.h"
+//#include "update_protocol.pb.h"
+#include "update_protocol_v3.pb.h"
 
 //#include "manymouse.h"
 
@@ -46,5 +47,6 @@
 #include "wiimote.h"
 
 #include "update_protocol.pb.h"
+#include "update_protocol_v3.pb.h"
 
 // TODO: reference additional headers your program requires here
