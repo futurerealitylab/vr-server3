@@ -7,7 +7,11 @@ Includes some code from OptiTrack.
 
 using namespace std;
 
+// IP for this host computer
+static const string IP_ADDR = "192.168.1.44";
 
+
+// ADD YOUR WIIMOTE HARDWARE ADDRESSES HERE
 char *mote_id_to_label(QWORD id) {
 	switch (id) {
 	case 0x9da09e838483:
@@ -23,7 +27,7 @@ char *mote_id_to_label(QWORD id) {
 	}
 }
 
-wiimote  *motes[7] = { NULL };
+map<std::string, wiimote*> motes;
 unsigned detected = 0;
 
 class Stream {
@@ -43,6 +47,8 @@ class Stream {
 		if (multicast) {
 			err = setsockopt(s, SOL_SOCKET, SO_BROADCAST, (char*)&opt_val, sizeof(opt_val));
 			if (err == SOCKET_ERROR) {
+				printf("SOCKET ERROR; HIT ANY KEY TO ABORT\n");
+				getchar();
 				exit(0);
 			}
 		}
@@ -50,20 +56,25 @@ class Stream {
 		opt_val = 1;
 		err = setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char*)&opt_val, sizeof(opt_val));
 		if (err == SOCKET_ERROR) {
+			printf("SOCKET ERROR; HIT ANY KEY TO ABORT\n");
+			getchar();
 			exit(0);
 		}
 
 		// Bind to correct NIC
 		bind_addr.sin_family = AF_INET;
-		// bind_addr.sin_addr.s_addr = inet_addr(INADDR_ANY);
-		err = inet_pton(AF_INET, "192.168.1.44", &bind_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
+		err = inet_pton(AF_INET, IP_ADDR.c_str(), &bind_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
 		//err = inet_pton(AF_INET, "128.122.47.25", &bind_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
 		if (err == SOCKET_ERROR) {
+			printf("SOCKET ERROR; HIT ANY KEY TO ABORT\n");
+			getchar();
 			exit(0);
 		}
 		bind_addr.sin_port = 0;
 		err = ::bind(s, (struct sockaddr *)&bind_addr, sizeof(bind_addr));
 		if (err == SOCKET_ERROR) {
+			printf("SOCKET ERROR; HIT ANY KEY TO ABORT\n");
+			getchar();
 			exit(0);
 		}
 
@@ -73,6 +84,8 @@ class Stream {
 		// Proper mutlicast group
 		err = inet_pton(AF_INET, ip, &addr.sin_addr);
 		if (err == SOCKET_ERROR) {
+			printf("SOCKET ERROR; HIT ANY KEY TO ABORT\n");
+			getchar();
 			exit(0);
 		}
 	}
@@ -108,23 +121,29 @@ sDataDescriptions* pDataDefs = NULL;
 // Rigid body labels, etc.
 map<int, string> idToLabel;
 void GetDataDescriptions() {
-	printf("\n\n[SampleClient] Requesting Data Descriptions...");
+	printf("\n\n[VRServer3] Requesting Data Descriptions...\n");
 	int nBodies = theClient->GetDataDescriptions(&pDataDefs);
 	if (!pDataDefs)
 	{
-		printf("[SampleClient] Unable to retrieve Data Descriptions.");
+		printf("[VRServer3] Unable to retrieve Data Descriptions.");
 		return;
 	}
-	printf("[SampleClient] Received %d Data Descriptions:\n", pDataDefs->nDataDescriptions);
+	printf("[VRServer3] Received %d Data Descriptions.\n", pDataDefs->nDataDescriptions);
 	for (int i = 0; i < pDataDefs->nDataDescriptions; i++)
 	{
-		printf("Data Description # %d (type=%d)\n", i, pDataDefs->arrDataDescriptions[i].type);
-		// TODO: Process descriptions for MarkerSets, Skeletons
-		if (pDataDefs->arrDataDescriptions[i].type == Descriptor_RigidBody)
-		{
+		if (pDataDefs->arrDataDescriptions[i].type == Descriptor_MarkerSet) {
+			// TODO: Process descriptions for MarkerSets
+		}
+		else if (pDataDefs->arrDataDescriptions[i].type == Descriptor_RigidBody) {
 			sRigidBodyDescription* pRB = pDataDefs->arrDataDescriptions[i].Data.RigidBodyDescription;
 			idToLabel[pRB->ID] = pRB->szName;
-		} else {
+		}
+		else if (pDataDefs->arrDataDescriptions[i].type == Descriptor_Skeleton) {
+			for (sRigidBodyDescription pRB : pDataDefs->arrDataDescriptions[i].Data.SkeletonDescription->RigidBodies) {
+				idToLabel[pRB.ID] = pRB.szName;
+			}
+		}
+		else {
 			printf("Unknown data type.");
 			continue;
 		}
@@ -134,7 +153,6 @@ void GetDataDescriptions() {
 class PacketGroup {
 private:
 	/* static fields */
-	static map<string, wiimote * > wiimotes;
 	const static int max_packet_bytes = 1000;
 	static vector<PacketGroup * > packet_groups;
 	static PacketGroup *head;
@@ -188,12 +206,10 @@ public:
 		next_packet = packets.begin();
 	}
 
-	// Add a live object to the packet group
-	// By Zhenyi
 	void addLiveBody(int id, string label, bool tracking_valid, float x, float y, float z, float qx, float qy, float qz, float qw) {
 		update_protocol_v3::LiveObject *liveObj = new update_protocol_v3::LiveObject();
 		
-		liveObj->set_label(label);						//optional string label = 1;
+		liveObj->set_label(label);
 		
 		liveObj->set_x(x);
 		liveObj->set_y(y);
@@ -204,8 +220,11 @@ public:
 		liveObj->set_qz(qz);
 		liveObj->set_qw(qw);
 
-		std::cout << "check qx: " << qx << "\tqy:" << qy << "\tqz:" << qz << "\tqw:" << qw << "\n";
-
+		// TODO: Wiimote/Other interface buttons
+		if (motes.count(label) > 0) {
+			motes[label]->RefreshState();
+			liveObj->set_button_bits(motes[label]->Button.Bits);
+		}
 		//liveObj->set_button_bits();
 
 		// not sure about the repeated axisbutton
@@ -221,6 +240,7 @@ public:
 		//}
 
 		update_protocol_v3::Update *current_packet = packets.back();
+		current_packet->set_lhs_frame(true);
 		if (!(current_packet->ByteSize() + liveObj->ByteSize() < max_packet_bytes)) {
 			// Create a new packet to hold the rigid body
 			current_packet = newPacket();
@@ -252,15 +272,15 @@ public:
 		packet_groups_lock.lock();
 		// Get the current packet of the packet group
 		update_protocol_v3::Update *packet = head->getNextPacketToSend();
-		// By Zhenyi
 		if (packet->label() == "") {
 			packet->set_label("motive");
 		}
-		// Check for wiimotes in this packet and update them BUT COMMENT By Zhenyi
+		// TODO: Check for wiimotes in this packet and update
+
 		// Fill the buffer
 		assert(packet->ByteSize() < max_packet_bytes);
 		packet->SerializePartialToArray(buffer, max_packet_bytes);
-		// std::cout << "sending packet of type: " << packet->id() << std::endl;
+		//std::cout << "sending packet of type: " << packet->label() << std::endl;
 		// Send the buffer
 		multicast_stream.send(buffer, packet->ByteSize());
 		unicast_stream.send(buffer, packet->ByteSize());
@@ -295,14 +315,12 @@ public:
 	}
 };
 /* Initialize PacketGroup static fields */
-map<std::string, wiimote * > PacketGroup::wiimotes = map<std::string, wiimote * >();
 vector<PacketGroup * > PacketGroup::packet_groups = vector<PacketGroup * >();
 PacketGroup * PacketGroup::head = NULL;
 std::mutex PacketGroup::packet_groups_lock;
 char PacketGroup::buffer[PacketGroup::max_packet_bytes];
 Stream PacketGroup::multicast_stream = Stream("224.1.1.1", 1611, true);
-//Stream PacketGroup::multicast_stream = Stream("239.255.42.99", 1511, true);
-Stream PacketGroup::unicast_stream = Stream("192.168.1.11", 1612, false);
+Stream PacketGroup::unicast_stream = Stream("128.122.176.116", 1612, false);
 //Stream PacketGroup::unicast_stream = Stream("128.122.47.25", 1510, false);
 
 int PacketGroup::mod_version = 0;
@@ -317,8 +335,6 @@ int PacketServingThread() {
 }
 
 int PacketReceivingThread() {
-	printf("beginning packet receiving thread\n");
-
 	WSAData version;        //We need to check the version.
 	WORD mkword = MAKEWORD(2, 2);
 	int what = WSAStartup(mkword, &version);
@@ -338,9 +354,8 @@ int PacketReceivingThread() {
 
 	sockaddr_in addr;
 	addr.sin_family = AF_INET;
-	//addr.sin_addr.s_addr = inet_addr("192.168.1.44");
 	addr.sin_port = htons(1615);
-	int err = inet_pton(AF_INET, "192.168.1.44", &addr.sin_addr); // S_ADDR of our IP for the WiFi interface
+	int err = inet_pton(AF_INET, IP_ADDR.c_str(), &addr.sin_addr); // S_ADDR of our IP for the WiFi interface
 	//int err = inet_pton(AF_INET, "128.122.47.25", &addr.sin_addr); // S_ADDR of our IP for the WiFi interface
 	if (err == SOCKET_ERROR) {
 		printf("error assigning address\n");
@@ -360,27 +375,22 @@ int PacketReceivingThread() {
 	sockaddr_in from_addr;
 	from_addr.sin_family = AF_INET;
 	from_addr.sin_port = htons(1615);
-	err = inet_pton(AF_INET, "192.168.1.44", &from_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
+	err = inet_pton(AF_INET, IP_ADDR.c_str(), &from_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
 	//err = inet_pton(AF_INET, "128.122.47.25", &from_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
 	if (err == SOCKET_ERROR) {
 		printf("error assigning address\n");
 	}
 	
 	while (true) {
-		//printf("listening for packet\n");
-		//int recv_status = recv(s, buf, len, flags);
 		int addr_len = sizeof(addr);
 		int recv_status = recvfrom(soc, buf, len, flags, (sockaddr*)&from_addr, &addr_len);
 		if (recv_status == SOCKET_ERROR){
 			std::cout << "Error in Receiving: " << WSAGetLastError() << std::endl;
 		}
-		
-		//printf("%d bytes received\n", recv_status);
-		
+
 		update_protocol_v3::Update *update = new update_protocol_v3::Update();
 		viveUpdateLock.lock();
 		update->ParseFromArray(buf, recv_status);
-		// std::cout << "update id: " << update->id() << std::endl;
 		viveUpdate = update;
 		viveUpdateLock.unlock();
 		Sleep(1);
@@ -391,7 +401,7 @@ int PacketReceivingThread() {
 void HandleNatNetPacket(sFrameOfMocapData *data, void *pUserData)
 {
 	if (idToLabel.size() == 0) {
-		printf("\nNo data descriptions received yet...");
+		printf("No data descriptions received yet...\n");
 		return;
 	}
 	NatNetClient* pClient = (NatNetClient*)pUserData;
@@ -406,16 +416,31 @@ void HandleNatNetPacket(sFrameOfMocapData *data, void *pUserData)
 	// Rigid Bodies
 	for (int i = 0; i < data->nRigidBodies; i++)
 	{
-		pg->addLiveBody(data->RigidBodies[i].ID,
-			idToLabel[data->RigidBodies[i].ID],
-			data->RigidBodies[i].params & 0x01, // tracking valid param
-			data->RigidBodies[i].x,
-			data->RigidBodies[i].y,
-			data->RigidBodies[i].z,
-			data->RigidBodies[i].qx,
-			data->RigidBodies[i].qy,
-			data->RigidBodies[i].qz,
-			data->RigidBodies[i].qw);
+		sRigidBodyData rb = data->RigidBodies[i];
+		pg->addLiveBody(rb.ID,
+			idToLabel[rb.ID],
+			rb.params & 0x01, // tracking valid param
+			rb.x, rb.y, rb.z,
+			rb.qx, rb.qy, rb.qz, rb.qw);
+	}
+	for (int i = 0; i < data->nSkeletons; i++) {
+		for (int j = 0; j < data->Skeletons[i].nRigidBodies; j++) {
+			sRigidBodyData rb = data->Skeletons[i].RigidBodyData[j];
+			pg->addLiveBody(rb.ID,
+				idToLabel[rb.ID],
+				rb.params & 0x01, // tracking valid param
+				rb.x, rb.y, rb.z,
+				rb.qx, rb.qy, rb.qz, rb.qw);
+		}
+	}
+	for (int i = 0; i < data->nOtherMarkers; i++) {
+		float* m = data->OtherMarkers[i];
+		pg->addLiveBody(0,
+			"marker",
+			1, // tracking valid param
+			m[0], m[1], m[2],
+			0, 0, 0, 1);
+		
 	}
 	PacketGroup::setHead(pg);
 }
@@ -433,7 +458,8 @@ int _tmain(int argc, _TCHAR* argv[])
 			break;
 		}
 		detected += 1;
-		motes[detected - 1] = next;
+		string label = mote_id_to_label(next->UniqueID);
+		motes[label] = next;
 		next->SetLEDs(0x0f);
 		printf("\nConnected to wiimote #%u: %" PRIx64, detected - 1, next->UniqueID);
 		printf("\nname: %s", mote_id_to_label(next->UniqueID));
@@ -443,7 +469,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
 	
 	int iResult;
-	int iConnectionType = ConnectionType_Multicast; // ConnectionType_Unicast;
+	int iConnectionType = ConnectionType_Multicast;
 
 	// Create NatNet Client
 	iResult = CreateClient(iConnectionType);
@@ -458,17 +484,17 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 
 	// Send/receive test request
-	printf("[SampleClient] Sending Test Request\n");
+	printf("[VRServer3] Sending Test Request\n");
 	void* response;
 	int nBytes;
 	iResult = theClient->SendMessageAndWait("TestRequest", &response, &nBytes);
 	if (iResult == ErrorCode_OK)
 	{
-		printf("[SampleClient] Received: %s", (char*)response);
+		printf("[VRServer3] Received: %s", (char*)response);
 	}
 	GetDataDescriptions();
 
-	printf("\nClient is connected to server and listening for data...\n");
+	printf("\nServer is connected to Motive and listening for data...\n");
 	int c;
 	bool bExit = false;
 	int clientsI = 0;
@@ -478,15 +504,14 @@ int _tmain(int argc, _TCHAR* argv[])
 	thread packet_serving_thread(PacketServingThread);
 	thread packet_receiving_thread(PacketReceivingThread);
 
-	while (1)
+	while (!bExit)
 	{
-		//system("CLS");
 		printf("(press the 'h' key for help)\n");
 		c = _getch();
 		switch (c)
 		{
 		case 'h':
-			printf("\nc: client connections\nr: reset\nq: quit\np: print server info\nd: refresh data descriptions\nf: print out most recent mocap frame ID\nm: multicast\nu: unicast\nz: map mice");
+			printf("r: reset\nq: quit\np: print server info\nd: refresh data descriptions\n");
 			break;
 		case 'q':
 			bExit = true;
@@ -508,38 +533,16 @@ int _tmain(int argc, _TCHAR* argv[])
 			GetDataDescriptions();
 			continue;
 			break;
-		case 'f':
-		{
-			sFrameOfMocapData* pData = theClient->GetLastFrameOfData();
-			printf("Most Recent Frame: %d", pData->iFrame);
-		}
-		break;
-		case 'm':	                        // change to multicast
-			iResult = CreateClient(ConnectionType_Multicast);
-			if (iResult == ErrorCode_OK)
-				printf("Client connection type changed to Multicast.\n\n");
-			else
-				printf("Error changing client connection type to Multicast.\n\n");
-			break;
-		case 'u':	                        // change to unicast
-			iResult = CreateClient(ConnectionType_Unicast);
-			if (iResult == ErrorCode_OK)
-				printf("Client connection type changed to Unicast.\n\n");
-			else
-				printf("Error changing client connection type to Unicast.\n\n");
-			break;
 		default:
 			printf("unrecognized keycode: %c", c);
-			break;
-		}
-		if (bExit) {
 			break;
 		}
 	}
 
 	// Done - clean up.
+	packet_receiving_thread.detach();
+	packet_serving_thread.detach();
 	theClient->Uninitialize();
-
 	return ErrorCode_OK;
 }
 
@@ -584,7 +587,7 @@ int CreateClient(int iConnectionType)
 		memset(&ServerDescription, 0, sizeof(ServerDescription));
 		theClient->GetServerDescription(&ServerDescription);
 
-		printf("[Client] Server application info:\n");
+		printf("Motive Server application info:\n");
 		printf("Application: %s (ver. %d.%d.%d.%d)\n", ServerDescription.szHostApp, ServerDescription.HostAppVersion[0],
 			ServerDescription.HostAppVersion[1], ServerDescription.HostAppVersion[2], ServerDescription.HostAppVersion[3]);
 		printf("NatNet Version: %d.%d.%d.%d\n", ServerDescription.NatNetVersion[0], ServerDescription.NatNetVersion[1],

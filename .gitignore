@@ -2,3 +2,6 @@
 *.opensdf
 *.suo
 /BlackBoxServer/BlackBoxServer/x64/*
+/BlackBoxServer/Debug
+/BlackBoxServer/BlackBoxServer/Debug
+/BlackBoxServer/x64/Debug

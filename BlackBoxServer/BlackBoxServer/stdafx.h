@@ -23,15 +23,10 @@
 #include <inttypes.h>
 #include <vector>
 #include <mutex>
-
-#define INTERNAL_SUPPRESS_PROTOBUF_FIELD_DEPRECATION
-//#include "update_protocol.pb.h"
-#include "update_protocol_v3.pb.h"
-
-//#include "manymouse.h"
-
 #include <algorithm>
 
+#define INTERNAL_SUPPRESS_PROTOBUF_FIELD_DEPRECATION
+#include "update_protocol_v3.pb.h"
 #include <google/protobuf/stubs/common.h>
 #include <google/protobuf/stubs/once.h>
 #include <google/protobuf/io/coded_stream.h>
@@ -41,12 +36,10 @@
 #include <google/protobuf/reflection_ops.h>
 #include <google/protobuf/wire_format.h>
 #include <google/protobuf/arena.h>
+
 #include "../Include/NatNetTypes.h"
 #include "../Include/NatNetClient.h"
 
 #include "wiimote.h"
 
-#include "update_protocol.pb.h"
 #include "update_protocol_v3.pb.h"
-
-// TODO: reference additional headers your program requires here

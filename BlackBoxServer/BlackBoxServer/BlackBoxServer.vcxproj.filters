@@ -56,21 +56,6 @@
     <ClCompile Include="BlackBoxServer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\..\pymanymouse-master\macosx_hidutilities.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\pymanymouse-master\windows_wminput.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\pymanymouse-master\x11_xinput2.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\pymanymouse-master\linux_evdev.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\..\pymanymouse-master\macosx_hidmanager.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="wiimote.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
