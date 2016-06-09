@@ -5,23 +5,35 @@ Includes some code from OptiTrack.
 
 #include "stdafx.h"
 
+//#define LCL_BROADCAST
+//#define RMT_BROADCAST // TODO: uncomment
+#define RMT_RCV // TODO: comment
+
 using namespace std;
 
 // IP for this host computer
+#ifdef LCL_BROADCAST
 static const string IP_ADDR = "192.168.1.44";
+#elif defined RMT_BROADCAST
+static const string IP_ADDR = ""; // TODO: Enter MAGNET computer IP
+#elif defined RMT_RCV
+static const string IP_ADDR = "128.122.47.161";
+#endif
 
 
 // ADD YOUR WIIMOTE HARDWARE ADDRESSES HERE
 char *mote_id_to_label(QWORD id) {
 	switch (id) {
-	case 0x9da09e838483:
-		return "VR1_wand";
+	//case 0x9da2a2838788:
+	//	return "VR5_wand";
+	case 0x9898977f7f7d://0x9da09e838483:
+		return "VR4_wand";
 	case 0x9898977d7f7f:
 		return "VR2_wand";
 	case 0x96979d7c7d83:
 		return "VR3_wand";
-	case 0x9b9d9a828280:
-		return "VR4_wand";
+	case 0x9da2a2838788://0x9b9d9a828280:
+		return "VR1_wand";
 	default:
 		return "???";
 	}
@@ -108,8 +120,8 @@ int CreateClient(int iConnectionType);
 int PacketServingThread();
 int PacketReceivingThread();
 
-update_protocol_v3::Update *viveUpdate;
-std::mutex viveUpdateLock;
+update_protocol_v3::Update *recvUpdate;
+std::mutex recvUpdateLock;
 
 unsigned int MyServersDataPort = 1511;
 unsigned int MyServersCommandPort = 1510;
@@ -153,13 +165,17 @@ void GetDataDescriptions() {
 class PacketGroup {
 private:
 	/* static fields */
-	const static int max_packet_bytes = 1000;
-	static vector<PacketGroup * > packet_groups;
+	const static int max_packet_bytes = 872;
+	static vector<PacketGroup*> packet_groups;
 	static PacketGroup *head;
+	static string last_label;
 	static std::mutex packet_groups_lock;
 	static char buffer[max_packet_bytes];
+#ifdef LCL_BROADCAST
 	static Stream multicast_stream;
+#elif defined RMT_BROADCAST || defined RMT_RCV
 	static Stream unicast_stream;
+#endif
 
 	// This static field should only be accessed by PacketGroup instances
 	// It should not be accessed by the static class, multiple threads,
@@ -172,15 +188,12 @@ private:
 	int timestamp;
 	bool recording;
 	bool models_changed;
+	string label;
+	bool all_sent;
 	/* private instance methods */
 	update_protocol_v3::Update *newPacket() {
-		update_protocol_v3::Update *packet = new update_protocol_v3::Update();//
-		packet->set_mod_version(mod_version++);
-		//TODO
-		//packet->set_lhs_frame(true);	
-		packet->set_time(timestamp);
-		packets.push_back(packet);
-		next_packet = packets.begin();
+		update_protocol_v3::Update *packet = new update_protocol_v3::Update();
+		addPacket(packet);
 		return packet;
 	}
 public:
@@ -189,42 +202,60 @@ public:
 	 * When a PacketGroup is set as the latest/head packet group it should not be modified and 
 	 * its instance methods should no longer be invoked by an outside class.
 	*/
-	PacketGroup(int _timestamp, bool _recording, bool _models_changed) {
+	PacketGroup(int _timestamp, bool _recording, bool _models_changed, string _label) {
 		timestamp = _timestamp;
 		recording = _recording;
 		models_changed = _models_changed;
+		label = _label;
+		all_sent = false;
 		packets = vector<update_protocol_v3::Update * > ();
 		// Add the first packet
-		update_protocol_v3::Update *motes_packet = newPacket();
-		assert(motes_packet->ByteSize() < max_packet_bytes);
+		update_protocol_v3::Update *packet = newPacket();
+		assert(packet->ByteSize() < max_packet_bytes);
 		// Start the iterator
 		next_packet = packets.begin();
 	}
 	void addPacket(update_protocol_v3::Update *packet) {
 		packet->set_mod_version(mod_version++);
+		packet->set_time(timestamp);
+		packet->set_label(label);
 		packets.push_back(packet);
 		next_packet = packets.begin();
 	}
 
-	void addLiveBody(int id, string label, bool tracking_valid, float x, float y, float z, float qx, float qy, float qz, float qw) {
+	void addLiveObject(update_protocol_v3::LiveObject o, bool lhs) {
+		addLiveObject(o.label(), true, o.x(), o.y(), o.z(), o.qx(), o.qy(), o.qz(), o.qw(), lhs, o.button_bits());
+	}
+
+	void addLiveObject(string label, bool tracking_valid, float x, float y, float z, float qx, float qy, float qz, float qw, bool lhs, int button_bits) {
 		update_protocol_v3::LiveObject *liveObj = new update_protocol_v3::LiveObject();
 		
 		liveObj->set_label(label);
-		
-		liveObj->set_x(x);
-		liveObj->set_y(y);
-		liveObj->set_z(z);
 
-		liveObj->set_qx(qx);
-		liveObj->set_qy(qy);
-		liveObj->set_qz(qz);
-		liveObj->set_qw(qw);
+		if (tracking_valid) {
+			liveObj->set_x(x);
+			liveObj->set_y(y);
+			liveObj->set_z(z);
+
+			liveObj->set_qx(qx);
+			liveObj->set_qy(qy);
+			liveObj->set_qz(qz);
+			liveObj->set_qw(qw);
+		}
+		else {
+			liveObj->set_x(0);
+			liveObj->set_y(0);
+			liveObj->set_z(0);
+			liveObj->set_qx(0);
+			liveObj->set_qy(0);
+			liveObj->set_qz(0);
+			liveObj->set_qw(1);
+		}
 
 		// TODO: Wiimote/Other interface buttons
-		if (motes.count(label) > 0) {
-			motes[label]->RefreshState();
-			liveObj->set_button_bits(motes[label]->Button.Bits);
-		}
+		liveObj->set_button_bits(button_bits);
+		//if (button_bits>0)
+		//cout << label << ": " << button_bits << endl;
 		//liveObj->set_button_bits();
 
 		// not sure about the repeated axisbutton
@@ -234,20 +265,29 @@ public:
 		//}
 			
 		// not sure about the repeated extradata
-		//int extra_data_size = liveObj->extra_data_size();
-		//for (int i = 0; i < extra_data_size; i++) {
-		//	update_protocol_v3::ExtraData * extraDt = liveObj->add_extra_data();
-		//}
+		int extra_data_size = liveObj->extra_data_size();
+		for (int i = 0; i < extra_data_size; i++) {
+			update_protocol_v3::ExtraData * extraDt = liveObj->add_extra_data();
+			extraDt->set_label(liveObj->extra_data(i).label());
+			extraDt->set_bool_val(liveObj->extra_data(i).bool_val());
+			extraDt->set_int_val(liveObj->extra_data(i).int_val());
+			extraDt->set_float_val(liveObj->extra_data(i).float_val());
+			extraDt->set_double_val(liveObj->extra_data(i).double_val());
+			extraDt->set_string_val(liveObj->extra_data(i).string_val());
+			extraDt->set_bytes_val(liveObj->extra_data(i).bytes_val());
+		}
 
 		update_protocol_v3::Update *current_packet = packets.back();
-		current_packet->set_lhs_frame(true);
 		if (!(current_packet->ByteSize() + liveObj->ByteSize() < max_packet_bytes)) {
 			// Create a new packet to hold the rigid body
+			//cout << "creating new packet" << endl;
 			current_packet = newPacket();
 		}
-		assert(current_packet->ByteSize() + liveObj->ByteSize() < max_packet_bytes);
+		current_packet->set_lhs_frame(lhs);
+		assert(current_packet->ByteSize() + liveObj->ByteSize() < max_packet_bytes + 100);
 		current_packet->mutable_live_objects()->AddAllocated(liveObj);
-		assert(current_packet->ByteSize() < max_packet_bytes);
+		assert(current_packet->ByteSize() < max_packet_bytes + 100);
+		//cout << "current packet size: " << current_packet->ByteSize() << endl;
 	}
 
 	update_protocol_v3::Update *getNextPacketToSend() {
@@ -256,6 +296,7 @@ public:
 		// Step forward and reset to the beginning if we are at the end
 		next_packet++;
 		if (next_packet == packets.end()) {
+			all_sent = true;
 			next_packet = packets.begin();
 		}
 		return packet;
@@ -272,18 +313,28 @@ public:
 		packet_groups_lock.lock();
 		// Get the current packet of the packet group
 		update_protocol_v3::Update *packet = head->getNextPacketToSend();
-		if (packet->label() == "") {
-			packet->set_label("motive");
-		}
+		//cout << head->label << ": sending packet " << head->next_packet-head->packets.begin()+1 << " out of " << head->packets.size() << endl;
 		// TODO: Check for wiimotes in this packet and update
 
 		// Fill the buffer
-		assert(packet->ByteSize() < max_packet_bytes);
+		//cout << "packet size: " << packet->ByteSize() << endl;
+		assert(packet->ByteSize() < max_packet_bytes + 128);
 		packet->SerializePartialToArray(buffer, max_packet_bytes);
-		//std::cout << "sending packet of type: " << packet->label() << std::endl;
 		// Send the buffer
+		//std::cout << "sending packet of type: " << packet->label() << std::endl;
+		//cout << packet->label() << ": sending " << packet->live_objects_size() << " live objects" << endl;
+		//for (update_protocol_v3::LiveObject o : packet->live_objects()) {
+		//	cout << o.label() << ", ";
+		//}
+		//cout << endl;
+#ifdef LCL_BROADCAST
 		multicast_stream.send(buffer, packet->ByteSize());
+#elif defined RMT_BROADCAST || defined RMT_RCV
 		unicast_stream.send(buffer, packet->ByteSize());
+#endif
+		last_label = head->label;
+
+		
 
 		packet_groups_lock.unlock();
 	}
@@ -292,7 +343,22 @@ public:
 	static void setHead(PacketGroup *newHead) {
 		packet_groups_lock.lock();
 		packet_groups.push_back(newHead);
-		head = newHead;
+		if (head == NULL || head->all_sent) {
+			if (newHead->label != last_label) {
+				head = newHead;
+			}
+			else {
+				bool set_head = true;
+				for (PacketGroup *pg : packet_groups) {
+					if (pg->label != newHead->label) {
+						set_head = false;
+					}
+				}
+				if (set_head) {
+					head = newHead;
+				}
+			}
+		}
 		packet_groups_lock.unlock();
 	}
 
@@ -301,27 +367,36 @@ public:
 		vector<int> indexes_to_delete = vector<int>();
 		// Find packet groups to delete
 		for (int i = 0; i < packet_groups.size(); i++) {
-			if (packet_groups[i] != head) {
+			if (packet_groups[i] != head && packet_groups[i]->label == head->label) {
 				indexes_to_delete.push_back(i);
 			}
 		}
 		// Delete them in backwards order
 		for (int i = indexes_to_delete.size() - 1; i >= 0; i--) {
-			int index = indexes_to_delete[i];
-			delete(packet_groups[index]);
-			packet_groups.erase(packet_groups.begin() + index);
+			int group_index = indexes_to_delete[i];
+			PacketGroup *pg = packet_groups[group_index];
+			for (int pi = pg->packets.size() - 1; pi >= 0; pi--) {
+				update_protocol_v3::Update *p = pg->packets[pi];
+				delete(p);
+				pg->packets.erase(pg->packets.begin() + pi);
+			}
+			delete(packet_groups[group_index]);
+			packet_groups.erase(packet_groups.begin() + group_index);
 		}
 		packet_groups_lock.unlock();
 	}
 };
 /* Initialize PacketGroup static fields */
-vector<PacketGroup * > PacketGroup::packet_groups = vector<PacketGroup * >();
+vector<PacketGroup*> PacketGroup::packet_groups = vector<PacketGroup*>();
+string PacketGroup::last_label = "";
 PacketGroup * PacketGroup::head = NULL;
 std::mutex PacketGroup::packet_groups_lock;
 char PacketGroup::buffer[PacketGroup::max_packet_bytes];
+#ifdef LCL_BROADCAST
 Stream PacketGroup::multicast_stream = Stream("224.1.1.1", 1611, true);
-Stream PacketGroup::unicast_stream = Stream("128.122.176.116", 1612, false);
-//Stream PacketGroup::unicast_stream = Stream("128.122.47.25", 1510, false);
+#elif defined RMT_BROADCAST || defined RMT_RCV
+Stream PacketGroup::unicast_stream = Stream("128.122.47.161", 1611, false);
+#endif
 
 int PacketGroup::mod_version = 0;
 
@@ -389,11 +464,17 @@ int PacketReceivingThread() {
 		}
 
 		update_protocol_v3::Update *update = new update_protocol_v3::Update();
-		viveUpdateLock.lock();
 		update->ParseFromArray(buf, recv_status);
-		viveUpdate = update;
-		viveUpdateLock.unlock();
-		Sleep(1);
+		delete recvUpdate;
+		recvUpdate = update;
+		PacketGroup *pg = new PacketGroup(recvUpdate->time(), false, true, update->label());
+		if (recvUpdate != NULL) {
+			for (int i = 0; i < recvUpdate->live_objects_size(); i++) {
+				update_protocol_v3::LiveObject o = recvUpdate->live_objects(i);
+				pg->addLiveObject(o, update->lhs_frame());
+			}
+		}
+		PacketGroup::setHead(pg);
 	}
 	
 }
@@ -401,47 +482,56 @@ int PacketReceivingThread() {
 void HandleNatNetPacket(sFrameOfMocapData *data, void *pUserData)
 {
 	if (idToLabel.size() == 0) {
-		printf("No data descriptions received yet...\n");
+		//printf("No data descriptions received yet...\n");
 		return;
 	}
 	NatNetClient* pClient = (NatNetClient*)pUserData;
 	bool bIsRecording = data->params & 0x01;
 	bool bTrackedModelsChanged = data->params & 0x02;
-	PacketGroup *pg = new PacketGroup(data->fTimestamp * 1000, false, true);
-	viveUpdateLock.lock();
-	if (viveUpdate) {
-		pg->addPacket(viveUpdate);
-	}
-	viveUpdateLock.unlock();
+	PacketGroup *pg = new PacketGroup((int)(data->fTimestamp * 1000), false, true, "motive");
+
 	// Rigid Bodies
 	for (int i = 0; i < data->nRigidBodies; i++)
 	{
 		sRigidBodyData rb = data->RigidBodies[i];
-		pg->addLiveBody(rb.ID,
-			idToLabel[rb.ID],
+
+		int button_bits = 0;
+		string label = idToLabel[rb.ID];
+		if (motes.count(label) > 0) {
+			motes[label]->RefreshState();
+			button_bits = motes[label]->Button.Bits;
+		}
+
+		pg->addLiveObject(idToLabel[rb.ID],
 			rb.params & 0x01, // tracking valid param
 			rb.x, rb.y, rb.z,
-			rb.qx, rb.qy, rb.qz, rb.qw);
+			rb.qx, rb.qy, rb.qz, rb.qw,
+			true,
+			button_bits);
 	}
 	for (int i = 0; i < data->nSkeletons; i++) {
 		for (int j = 0; j < data->Skeletons[i].nRigidBodies; j++) {
 			sRigidBodyData rb = data->Skeletons[i].RigidBodyData[j];
-			pg->addLiveBody(rb.ID,
-				idToLabel[rb.ID],
+			pg->addLiveObject(idToLabel[rb.ID],
 				rb.params & 0x01, // tracking valid param
 				rb.x, rb.y, rb.z,
-				rb.qx, rb.qy, rb.qz, rb.qw);
+				rb.qx, rb.qy, rb.qz, rb.qw,
+				true,
+				0);
 		}
 	}
+	/*
 	for (int i = 0; i < data->nOtherMarkers; i++) {
 		float* m = data->OtherMarkers[i];
-		pg->addLiveBody(0,
-			"marker",
+		pg->addLiveObject("marker",
 			1, // tracking valid param
 			m[0], m[1], m[2],
-			0, 0, 0, 1);
+			0, 0, 0, 1,
+			true,
+			0);
 		
 	}
+	*/
 	PacketGroup::setHead(pg);
 }
 
