@@ -5,9 +5,9 @@ Includes some code from OptiTrack.
 
 #include "stdafx.h"
 
-//#define LCL_BROADCAST
+#define LCL_BROADCAST
 //#define RMT_BROADCAST // TODO: uncomment
-#define RMT_RCV // TODO: comment
+//#define RMT_RCV // TODO: comment
 
 using namespace std;
 
@@ -119,6 +119,7 @@ void resetClient();
 int CreateClient(int iConnectionType);
 int PacketServingThread();
 int PacketReceivingThread();
+void checkForWiimotes();
 
 update_protocol_v3::Update *recvUpdate;
 std::mutex recvUpdateLock;
@@ -255,7 +256,7 @@ public:
 		// TODO: Wiimote/Other interface buttons
 		liveObj->set_button_bits(button_bits);
 		//if (button_bits>0)
-		//cout << label << ": " << button_bits << endl;
+		//	cout << label << ": " << button_bits << endl;
 		//liveObj->set_button_bits();
 
 		// not sure about the repeated axisbutton
@@ -322,6 +323,7 @@ public:
 		packet->SerializePartialToArray(buffer, max_packet_bytes);
 		// Send the buffer
 		//std::cout << "sending packet of type: " << packet->label() << std::endl;
+		//std::cout << "sending packet: " << packet->mod_version() << std::endl;
 		//cout << packet->label() << ": sending " << packet->live_objects_size() << " live objects" << endl;
 		//for (update_protocol_v3::LiveObject o : packet->live_objects()) {
 		//	cout << o.label() << ", ";
@@ -426,7 +428,7 @@ int PacketReceivingThread() {
 	}
 	if (soc == INVALID_SOCKET)
 		std::cout << "Creating socket fail\n";
-
+	
 	sockaddr_in addr;
 	addr.sin_family = AF_INET;
 	addr.sin_port = htons(1615);
@@ -450,14 +452,14 @@ int PacketReceivingThread() {
 	sockaddr_in from_addr;
 	from_addr.sin_family = AF_INET;
 	from_addr.sin_port = htons(1615);
-	err = inet_pton(AF_INET, IP_ADDR.c_str(), &from_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
+	err = inet_pton(AF_INET, "172.22.31.129", &from_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
 	//err = inet_pton(AF_INET, "128.122.47.25", &from_addr.sin_addr); // S_ADDR of our IP for the WiFi interface
 	if (err == SOCKET_ERROR) {
 		printf("error assigning address\n");
 	}
 	
 	while (true) {
-		int addr_len = sizeof(addr);
+		int addr_len = sizeof(from_addr);
 		int recv_status = recvfrom(soc, buf, len, flags, (sockaddr*)&from_addr, &addr_len);
 		if (recv_status == SOCKET_ERROR){
 			std::cout << "Error in Receiving: " << WSAGetLastError() << std::endl;
@@ -467,6 +469,7 @@ int PacketReceivingThread() {
 		update->ParseFromArray(buf, recv_status);
 		delete recvUpdate;
 		recvUpdate = update;
+		// cout << "received " << recvUpdate->live_objects_size() << " objects." << endl;
 		PacketGroup *pg = new PacketGroup(recvUpdate->time(), false, true, update->label());
 		if (recvUpdate != NULL) {
 			for (int i = 0; i < recvUpdate->live_objects_size(); i++) {
@@ -538,23 +541,10 @@ void HandleNatNetPacket(sFrameOfMocapData *data, void *pUserData)
 int _tmain(int argc, _TCHAR* argv[])
 {
 	printf("== Holojam server =======---\n");
-	/* WiiMotes */
-	printf("\nLooking for wiimotes...");
-	detected = 0;
-	while (detected < 7)
-	{
-		wiimote *next = new wiimote;
-		if (!next->Connect(wiimote::FIRST_AVAILABLE)) {
-			break;
-		}
-		detected += 1;
-		string label = mote_id_to_label(next->UniqueID);
-		motes[label] = next;
-		next->SetLEDs(0x0f);
-		printf("\nConnected to wiimote #%u: %" PRIx64, detected - 1, next->UniqueID);
-		printf("\nname: %s", mote_id_to_label(next->UniqueID));
-	}
-	printf("\nNo more remotes found\n");
+
+	// Detects and connects to Wiimotes
+	checkForWiimotes();
+
 	// Protobuf setup
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
 	
@@ -620,8 +610,8 @@ int _tmain(int argc, _TCHAR* argv[])
 			}
 			break;
 		case 'd':
+			checkForWiimotes();
 			GetDataDescriptions();
-			continue;
 			break;
 		default:
 			printf("unrecognized keycode: %c", c);
@@ -634,6 +624,38 @@ int _tmain(int argc, _TCHAR* argv[])
 	packet_serving_thread.detach();
 	theClient->Uninitialize();
 	return ErrorCode_OK;
+}
+
+void checkForWiimotes() {
+
+	if (!motes.empty()) {
+
+		auto itr = motes.begin();
+		while (itr != motes.end()) {
+			auto toErase = itr;
+			++itr;
+			delete(toErase->second);
+			motes.erase(toErase);
+		}
+	}
+
+	/* WiiMotes */
+	printf("\nLooking for wiimotes...");
+	detected = 0;
+	while (detected < 7)
+	{
+		wiimote *next = new wiimote;
+		if (!next->Connect(wiimote::FIRST_AVAILABLE)) {
+			break;
+		}
+		detected += 1;
+		string label = mote_id_to_label(next->UniqueID);
+		motes[label] = next;
+		next->SetLEDs(0x0f);
+		printf("\nConnected to wiimote #%u: %" PRIx64, detected - 1, next->UniqueID);
+		printf("\nname: %s", mote_id_to_label(next->UniqueID));
+	}
+	printf("\nNo more remotes found\n");
 }
 
 
